@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+//Transaction - from,to,timings,amount
+contract SimpleWallet {
+
+        struct Transaction{
+          address from;
+          address to;
+          uint timestamp;
+          uint amount;
+        }
+   Transaction[]public transactionHistory;
+    string public str;
+    address public owner;
+    bool public stop;
+    event Transfer(address receiver,uint amount);
+    event Receive(address sender,uint amout);
+      event ReceiveUser(address sender, address receiver,uint amount);
+
+    constructor(){
+        owner=msg.sender;
+    }
+    
+     modifier onlyOwner{
+        require(msg.sender==owner,"You dont have access");
+    _;
+   }
+mapping(address=>uint) suspiciousUser;
+   
+   modifier getSuspiciousUser(address _sender){
+    require(suspiciousUser[_sender]<5,"Activity found suspious,Try later");
+    _;
+   }
+   modifier isEmergencyDeclared(){
+    require(stop==false,"Emergency delared");
+    _;
+   }
+   function toggleStop()external{
+    stop=!stop;
+   }
+
+function changeOwner(address newOwner)public onlyOwner isEmergencyDeclared{
+  owner=newOwner;
+}
+
+    /**Contract related functions**/    // only works after 20th july  10:12pm
+    function transferToContract(uint _startTime) external payable getSuspiciousUser(msg.sender){
+      require(block.timestamp>_startTime,"send after 10:30");
+      transactionHistory.push(Transaction({   //transtion history
+        from:msg.sender,   
+        to:address(this),
+        timestamp:block.timestamp,
+        amount:msg.value
+      }));
+    }
+    function transferToUserViaContract(address payable _to, uint _weiAmount) external payable getSuspiciousUser(msg.sender) {
+        require(address(this).balance>=_weiAmount,"Insufficient Balance");
+         require(_to!=address(0),"Adress format incorrect");
+        _to.transfer(_weiAmount);
+        transactionHistory.push(Transaction({
+         from:msg.sender,
+         to:_to,
+         timestamp:block.timestamp,
+         amount:_weiAmount
+       }));
+
+        emit Transfer(_to,_weiAmount);
+    }
+    function withdrawFromContract(uint _weiAmount) external onlyOwner {
+       require(address(this).balance>=_weiAmount,"Insufficient Balance");
+       payable(owner).transfer(_weiAmount);
+        transactionHistory.push(Transaction({   //transtion history
+        from:address(this),
+        to:owner,
+        timestamp:block.timestamp,
+        amount:_weiAmount
+      }));
+    }
+    function getContractBalanceInWei() external view returns (uint) {
+         return address(this).balance;
+    }
+     /**User related functions**/
+    function transferToUserViaMsgValue(address _to) external payable {
+      require(owner.balance>=msg.value,"Insufficient balance");
+          require(_to!=address(0),"Adress format incorrect");
+        payable(_to).transfer(msg.value);
+           transactionHistory.push(Transaction({   //transtion history
+        from:msg.sender,
+        to:_to,
+        timestamp:block.timestamp,
+        amount:msg.value
+      }));
+    }
+    //event - sender,receiver, amount
+    function receiveFromUser() external payable {
+        require(msg.value>0,"value must be grater than 0");
+         payable(owner).transfer(msg.value);
+          transactionHistory.push(Transaction({   //transtion history
+        from:msg.sender,
+        to:owner,
+        timestamp:block.timestamp,
+        amount:msg.value
+      }));
+       emit ReceiveUser(msg.sender, owner, msg.value);
+
+    }
+
+    function getOwnerBalanceInWei() external view returns(uint){
+       return owner.balance;
+    }
+    receive() external payable {
+       transactionHistory.push(Transaction({   
+        from:msg.sender,
+        to:address(this),
+        timestamp:block.timestamp,
+        amount:msg.value
+      }));
+       emit Receive(msg.sender, msg.value);
+
+    }
+
+function suspiciousActivity(address _sender)public {
+    suspiciousUser[_sender]+=1;
+   }
+
+    fallback() external payable {
+      str="fackback function";
+      suspiciousActivity(msg.sender);
+     // payable (msg.sender).transfer(msg.value); //returning the ether to the user again;
+    }
+    function getTransactionHistory() external  view returns(Transaction[]memory){
+      return transactionHistory;
+    }
+    function emergencyWithdrawl() external {
+     require(stop==true,"Emergency not declared");
+     payable(owner).transfer((address(this).balance));
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
